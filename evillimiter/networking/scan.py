@@ -1,22 +1,76 @@
 import socket
 import subprocess
+import struct
 from tqdm import tqdm
-from scapy.all import sr1, ARP  # pylint: disable=no-name-in-module
+from scapy.all import sr1, ARP, IP, UDP, Raw  # pylint: disable=no-name-in-module
 from concurrent.futures import ThreadPoolExecutor
 
 from .host import Host
 from evillimiter.console.io import IO
 
 
+_ENCODED_WILDCARD_NAME = (
+    b"\x20\x43\x4b\x41\x43\x41\x43\x41\x43\x41\x43\x41\x43\x41"
+    b"\x43\x41\x43\x41\x43\x41\x43\x41\x43\x41\x43\x41\x43\x41"
+    b"\x43\x41\x43\x41\x43\x41\x43\x41\x43\x41\x43\x41\x43\x41"
+    b"\x43\x41\x43\x41\x43\x41\x43\x41\x43\x41\x43\x41\x43\x41"
+    b"\x41\x41"
+)
+
+
+def resolve_hostname_nbns(ip, timeout=2):
+    """
+    Resolves NetBIOS name via NBNS (UDP 137) NBSTAT query using scapy.
+    Returns hostname or empty string.
+    """
+    try:
+        packet = (
+            IP(dst=ip)
+            / UDP(sport=0, dport=137)
+            / Raw(
+                struct.pack(">H", 0)  # Transaction ID
+                + struct.pack(">H", 0x0010)  # Flags: standard query
+                + struct.pack(">H", 1)  # Questions
+                + struct.pack(">H", 0)  # Answer RRs
+                + struct.pack(">H", 0)  # Authority RRs
+                + struct.pack(">H", 0)  # Additional RRs
+                + _ENCODED_WILDCARD_NAME  # Name: *<00>
+                + struct.pack(">H", 0x0021)  # Type: NBSTAT
+                + struct.pack(">H", 0x0001)  # Class: IN
+            )
+        )
+        response = sr1(packet, timeout=timeout, verbose=0)
+        if response is None or not response.haslayer(Raw):
+            return ""
+        data = bytes(response[Raw])
+        if len(data) < 57:
+            return ""
+        num_names = data[56]
+        if num_names == 0:
+            return ""
+        name_start = 57
+        name_bytes = data[name_start : name_start + 15]
+        raw_name = (
+            name_bytes.rstrip(b"\x00\x20").decode("latin-1", errors="ignore").strip()
+        )
+        return raw_name
+    except Exception:
+        return ""
+
+
 def resolve_hostname(ip):
     """
     Resolves hostname for a given IP using multiple methods:
-    1. Reverse DNS lookup (socket.gethostbyaddr)
-    2. NetBIOS name via nmblookup (Windows machines)
-    3. mDNS name via avahi-resolve (Linux/macOS)
+    1. NetBIOS via NBNS (UDP 137) using scapy
+    2. Reverse DNS lookup (socket.gethostbyaddr)
+    3. NetBIOS name via nmblookup (external)
+    4. mDNS name via avahi-resolve (external)
     Returns hostname string or empty string if not found.
     """
-    name = ""
+
+    name = resolve_hostname_nbns(ip)
+    if name:
+        return name
 
     try:
         host_info = socket.gethostbyaddr(ip)
