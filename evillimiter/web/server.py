@@ -203,8 +203,6 @@ class WebServer:
 
         @app.route("/api/hosts/add", methods=["POST"])
         def api_add_host():
-            import socket
-
             data = request.get_json()
             ip = data.get("ip", "")
             if not ip:
@@ -217,12 +215,9 @@ class WebServer:
                 mac = resolved if resolved else ""
             if not mac:
                 return jsonify({"error": "unable to resolve mac"}), 400
-            name = ""
-            try:
-                info = socket.gethostbyaddr(ip)
-                name = info[0] if info else ""
-            except socket.herror:
-                pass
+            from evillimiter.networking.scan import resolve_hostname
+
+            name = resolve_hostname(ip)
             host = Host(ip, mac, name)
             with self.hosts_lock:
                 if host in self.hosts_list:

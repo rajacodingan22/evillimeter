@@ -246,8 +246,8 @@ function renderHosts(data) {
       '<td>' + h.id + '</td>' +
       '<td>' + h.ip + '</td>' +
       '<td style="font-size:11px;color:#888">' + h.mac + '</td>' +
-      '<td>' + (h.name || '-') + '</td>' +
-      '<td><span class="mfr-badge">' + (h.manufacturer || '-') + '</span></td>' +
+      '<td>' + (h.name || h.manufacturer || '-') + '</td>' +
+      '<td><span class="mfr-badge">' + (h.manufacturer || '-') + (h.device_type ? ' <em>' + h.device_type + '</em>' : '') + '</span></td>' +
       '<td><span class="tag ' + statusClass + '">' + statusText + '</span></td>' +
       '<td>' + (bw.upload_rate || '0') + '</td>' +
       '<td>' + (bw.download_rate || '0') + '</td>' +
