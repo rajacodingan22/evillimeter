@@ -1409,6 +1409,70 @@ OUI_DATABASE = {
     "08:6F:7B": "Samsung",
 }
 
+import json
+import os
+import urllib.request
+import urllib.error
+
+_OUI_CACHE_FILE = None
+_OUI_CACHE = {}
+
+
+def _get_oui_cache_path():
+    global _OUI_CACHE_FILE
+    if _OUI_CACHE_FILE is not None:
+        return _OUI_CACHE_FILE
+    config_dir = os.path.join(os.path.expanduser("~"), ".config", "evillimiter")
+    os.makedirs(config_dir, exist_ok=True)
+    _OUI_CACHE_FILE = os.path.join(config_dir, "oui_cache.json")
+    return _OUI_CACHE_FILE
+
+
+def _load_oui_cache():
+    global _OUI_CACHE
+    if _OUI_CACHE:
+        return
+    cache_path = _get_oui_cache_path()
+    if os.path.exists(cache_path):
+        try:
+            with open(cache_path, "r") as f:
+                _OUI_CACHE = json.load(f)
+        except (json.JSONDecodeError, OSError):
+            _OUI_CACHE = {}
+
+
+def _save_oui_cache():
+    cache_path = _get_oui_cache_path()
+    try:
+        with open(cache_path, "w") as f:
+            json.dump(_OUI_CACHE, f)
+    except OSError:
+        pass
+
+
+def lookup_manufacturer_online(mac):
+    """Lookup manufacturer from online API, with caching."""
+    if not mac or len(mac) < 8:
+        return ""
+    oui = mac.upper()[:8]
+    _load_oui_cache()
+    if oui in _OUI_CACHE:
+        return _OUI_CACHE[oui]
+    try:
+        url = "https://api.macvendors.com/" + oui
+        req = urllib.request.Request(url, headers={"User-Agent": "evillimiter/1.5"})
+        resp = urllib.request.urlopen(req, timeout=5)
+        mfr = resp.read().decode("utf-8", errors="ignore").strip()
+        if mfr:
+            _OUI_CACHE[oui] = mfr
+            _save_oui_cache()
+            return mfr
+    except (urllib.error.URLError, urllib.error.HTTPError, OSError):
+        pass
+    _OUI_CACHE[oui] = ""
+    return ""
+
+
 # Common OUI range patterns for major manufacturers not fully listed
 MANUFACTURER_PATTERNS = {
     "Apple": lambda oui: any(
@@ -1972,6 +2036,479 @@ MANUFACTURER_PATTERNS = {
     ),
     "Omron": lambda oui: any(oui.startswith(p) for p in ["00:00:70", "08:01:"]),
     "Mitsubishi": lambda oui: any(oui.startswith(p) for p in ["00:00:6B", "08:01:"]),
+    "Intel": lambda oui: any(
+        oui.startswith(p)
+        for p in [
+            "00:02:b3",
+            "00:07:e9",
+            "00:0b:cd",
+            "00:0c:f1",
+            "00:0d:0b",
+            "00:0f:53",
+            "00:11:11",
+            "00:12:7f",
+            "00:13:20",
+            "00:13:ce",
+            "00:15:00",
+            "00:16:76",
+            "00:19:d1",
+            "00:1b:0d",
+            "00:1b:21",
+            "00:1c:c0",
+            "00:1e:67",
+            "00:1f:3c",
+            "00:1f:5b",
+            "00:21:6a",
+            "00:22:68",
+            "00:23:15",
+            "00:24:d7",
+            "00:26:5e",
+            "00:26:c6",
+            "00:27:06",
+            "00:27:64",
+            "00:30:64",
+            "0c:ee:e6",
+            "10:7d:1a",
+            "10:e7:c6",
+            "14:18:77",
+            "14:58:d0",
+            "18:66:da",
+            "1c:8e:5c",
+            "20:47:47",
+            "24:0a:64",
+            "24:4b:03",
+            "28:16:ad",
+            "2c:27:d7",
+            "30:05:5c",
+            "34:02:86",
+            "34:64:a9",
+            "38:2c:4a",
+            "3c:52:82",
+            "40:a8:f0",
+            "44:39:c4",
+            "48:8f:5a",
+            "4c:79:ba",
+            "50:e5:49",
+            "54:8a:1a",
+            "58:1f:28",
+            "5c:51:88",
+            "60:33:4b",
+            "64:1c:67",
+            "68:05:ca",
+            "6c:0e:0d",
+            "70:5d:23",
+            "74:df:bf",
+            "78:4b:87",
+            "7c:10:c9",
+            "7c:b0:3e",
+            "80:32:53",
+            "84:1b:77",
+            "84:7b:3b",
+            "88:53:2e",
+            "8c:04:ba",
+            "90:1b:0e",
+            "94:b8:6d",
+            "98:90:96",
+            "9c:4e:36",
+            "a0:36:9f",
+            "a4:34:d9",
+            "a8:41:f4",
+            "ac:1f:6b",
+            "b0:48:7a",
+            "b4:2e:70",
+            "b8:81:98",
+            "bc:c2:93",
+            "c0:35:32",
+            "c4:65:16",
+            "c8:5b:76",
+            "cc:2d:8c",
+            "d0:17:c2",
+            "d4:3a:2c",
+            "d8:50:e6",
+            "dc:41:a9",
+            "e0:77:bb",
+            "e4:02:9b",
+            "e8:39:35",
+            "ec:13:b2",
+            "f0:76:1c",
+            "f4:4d:30",
+            "f8:fe:5e",
+            "fc:15:42",
+            "0c:ef:15",
+            "18:03:73",
+            "1c:69:7a",
+            "3c:7c:3f",
+            "50:3e:aa",
+            "5c:f9:dd",
+            "68:9e:f4",
+            "70:84:47",
+            "84:f0:1d",
+            "98:9e:63",
+        ]
+    ),
+    "Hon Hai Precision": lambda oui: any(
+        oui.startswith(p)
+        for p in [
+            "00:01:39",
+            "00:0b:01",
+            "00:0b:05",
+            "00:0f:0b",
+            "00:14:0e",
+            "00:17:0e",
+            "00:18:0e",
+            "00:1a:0e",
+            "00:1e:0e",
+            "00:21:0e",
+            "00:22:1e",
+            "00:23:1e",
+            "a8:e2:91",
+            "b0:83:fe",
+            "b0:c5:54",
+            "c8:f4:59",
+            "d4:6a:91",
+        ]
+    ),
+    "Liteon Technology": lambda oui: any(
+        oui.startswith(p)
+        for p in [
+            "00:0e:6a",
+            "00:11:49",
+            "00:12:84",
+            "00:1b:4c",
+            "00:1d:6d",
+            "00:21:4f",
+            "00:22:64",
+            "10:91:d1",
+            "2c:41:38",
+            "58:1f:ef",
+            "60:c5:47",
+            "70:cd:60",
+            "7c:b2:7d",
+            "84:2b:2b",
+            "94:10:3e",
+            "a0:40:41",
+            "a4:5e:60",
+            "b8:ac:6f",
+            "c8:4c:75",
+            "d0:27:88",
+        ]
+    ),
+    "TP-Link": lambda oui: any(
+        oui.startswith(p)
+        for p in [
+            "00:0e:8c",
+            "00:1a:3f",
+            "00:20:e4",
+            "04:a1:51",
+            "08:27:98",
+            "0c:80:63",
+            "10:27:f5",
+            "14:cf:92",
+            "18:a6:f7",
+            "1c:3b:f3",
+            "20:6a:ff",
+            "24:0f:5e",
+            "28:87:ba",
+            "2c:02:6f",
+            "30:b5:c2",
+            "34:78:5b",
+            "38:0e:4d",
+            "3c:46:d8",
+            "40:16:9d",
+            "44:d4:e0",
+            "48:22:54",
+            "4c:e1:73",
+            "50:c7:bf",
+            "54:9f:35",
+            "58:5c:db",
+            "60:e3:27",
+            "64:70:02",
+            "68:72:51",
+            "6c:5a:b0",
+            "70:4d:7b",
+            "74:da:38",
+            "78:54:2e",
+            "7c:d1:c3",
+            "80:ea:ca",
+            "84:74:2a",
+            "88:d7:f6",
+            "8c:a9:82",
+            "90:f6:52",
+            "94:d9:b3",
+            "98:da:c4",
+            "9c:28:bf",
+            "a0:f3:c1",
+            "a4:2b:b0",
+            "a8:5e:45",
+            "ac:84:c6",
+            "b0:be:76",
+            "b4:a4:e3",
+            "b8:3e:59",
+            "bc:76:70",
+            "c0:4a:00",
+            "c4:6e:6e",
+            "c8:3a:35",
+            "cc:32:e5",
+            "d0:20:5e",
+            "d4:6e:0e",
+            "d8:0d:17",
+            "dc:09:4c",
+            "e0:cc:7a",
+            "e4:a4:71",
+            "e8:de:27",
+            "ec:08:6b",
+            "f0:29:f1",
+            "f4:0b:93",
+            "f8:69:71",
+            "fc:db:b3",
+        ]
+    ),
+    "Huawei": lambda oui: any(
+        oui.startswith(p)
+        for p in [
+            "00:04:77",
+            "00:08:07",
+            "00:0f:e3",
+            "00:11:5e",
+            "00:14:85",
+            "00:18:82",
+            "00:1b:ee",
+            "00:1e:6e",
+            "00:23:4e",
+            "00:24:6e",
+            "04:56:8d",
+            "08:0a:0b",
+            "08:1f:f3",
+            "0c:1d:fe",
+            "0c:37:96",
+            "10:6f:d9",
+            "14:13:23",
+            "18:f0:e4",
+            "1c:03:a5",
+            "20:0b:2b",
+            "24:1c:24",
+            "28:bd:89",
+            "2c:2c:2c",
+            "2c:54:0d",
+            "2c:6e:d8",
+            "30:71:b2",
+            "34:9a:c4",
+            "38:6d:52",
+            "3c:e5:a6",
+            "40:8d:5c",
+            "44:31:16",
+            "48:62:93",
+            "4c:5c:1e",
+            "50:59:0a",
+            "54:15:b9",
+            "58:18:b1",
+            "5c:29:92",
+            "60:3a:7c",
+            "64:16:8d",
+            "68:6c:5a",
+            "6c:31:0e",
+            "70:ae:48",
+            "74:80:1d",
+            "78:b6:1b",
+            "7c:dd:90",
+            "80:2a:a8",
+            "84:25:62",
+            "88:33:14",
+            "8c:71:f8",
+            "90:9a:4a",
+            "94:95:08",
+            "98:3b:8f",
+            "9c:39:8e",
+            "a0:3b:e3",
+            "a4:3e:51",
+            "a8:bd:1a",
+            "ac:4d:1c",
+            "b0:4a:39",
+            "b4:fa:5a",
+            "b8:bc:1b",
+            "bc:05:43",
+            "c0:15:26",
+            "c4:1c:ef",
+            "c8:16:bd",
+            "cc:40:d0",
+            "d0:31:5a",
+            "d4:0b:1b",
+            "d8:0d:f9",
+            "dc:46:d8",
+            "e0:75:cf",
+            "e4:53:27",
+            "e8:6d:f3",
+            "ec:23:3a",
+            "f0:7b:cb",
+            "f4:7b:5e",
+            "f8:15:da",
+            "fc:99:04",
+        ]
+    ),
+    "Samsung": lambda oui: any(
+        oui.startswith(p)
+        for p in [
+            "00:00:f0",
+            "00:01:5b",
+            "00:0f:b5",
+            "00:11:b0",
+            "00:12:47",
+            "00:14:4c",
+            "00:14:a4",
+            "00:15:99",
+            "00:16:e2",
+            "00:17:d9",
+            "00:18:af",
+            "00:19:5e",
+            "00:1a:a1",
+            "00:1b:2a",
+            "00:1c:48",
+            "00:1d:a5",
+            "00:1e:4a",
+            "00:1f:cc",
+            "00:20:0b",
+            "00:21:5c",
+            "00:22:ba",
+            "00:23:78",
+            "00:24:54",
+            "00:24:e9",
+            "00:26:37",
+            "04:0d:84",
+            "08:09:f6",
+            "08:fc:88",
+            "0c:5f:35",
+            "0c:71:5d",
+            "10:15:ea",
+            "14:19:22",
+            "18:0f:76",
+            "1c:60:90",
+            "20:37:06",
+            "24:0b:0a",
+            "28:4e:3e",
+            "2c:20:56",
+            "2c:5a:05",
+            "30:05:88",
+            "34:5d:a8",
+            "38:7a:0e",
+            "3c:08:fc",
+            "40:84:54",
+            "44:4a:d9",
+            "48:2b:14",
+            "4c:4b:aa",
+            "50:e0:85",
+            "54:0c:03",
+            "58:db:7a",
+            "5c:49:3e",
+            "60:57:61",
+            "64:4b:f0",
+            "68:a0:3e",
+            "6c:70:9f",
+            "70:8b:78",
+            "74:35:77",
+            "78:2b:cb",
+            "7c:11:cb",
+            "80:0c:67",
+            "84:32:64",
+            "88:24:4c",
+            "8c:89:a5",
+            "90:17:e7",
+            "94:95:30",
+            "98:0c:ee",
+            "9c:4a:66",
+            "a0:3a:e5",
+            "a4:8e:22",
+            "a8:66:7f",
+            "ac:5b:a9",
+            "b0:2e:f7",
+            "b4:5b:a1",
+            "b8:07:e9",
+            "bc:5f:f4",
+            "c0:98:e5",
+            "c4:a1:48",
+            "c8:4b:4b",
+            "cc:3c:2f",
+            "d0:b4:60",
+            "d4:20:b5",
+            "d8:23:9c",
+            "dc:71:96",
+            "e0:fe:b5",
+            "e4:6f:13",
+            "e8:f2:e4",
+            "ec:63:d6",
+            "f0:7d:68",
+            "f4:0f:1b",
+            "f8:71:d8",
+            "fc:75:e0",
+        ]
+    ),
+    "Xiaomi": lambda oui: any(
+        oui.startswith(p)
+        for p in [
+            "04:cf:8c",
+            "08:0e:4b",
+            "0c:1d:af",
+            "10:1c:0c",
+            "14:1d:26",
+            "18:79:14",
+            "1c:47:87",
+            "20:3b:6c",
+            "24:23:27",
+            "28:4c:a8",
+            "2c:27:70",
+            "30:0a:a4",
+            "34:68:5d",
+            "38:4d:24",
+            "3c:26:73",
+            "40:a5:c1",
+            "44:7a:49",
+            "48:60:a4",
+            "4c:24:5c",
+            "50:94:17",
+            "54:07:24",
+            "58:78:6a",
+            "5c:02:5b",
+            "60:56:9d",
+            "64:09:80",
+            "68:21:27",
+            "6c:2e:85",
+            "70:2a:d6",
+            "74:34:42",
+            "78:53:0d",
+            "7c:21:0d",
+            "80:6f:b0",
+            "84:8f:69",
+            "88:98:d7",
+            "8c:5a:f8",
+            "90:8d:6c",
+            "94:fd:1e",
+            "98:f6:27",
+            "9c:2a:70",
+            "a0:07:37",
+            "a4:7b:2c",
+            "a8:4e:3b",
+            "ac:f7:f3",
+            "b0:68:e6",
+            "b4:5e:e2",
+            "b8:6b:23",
+            "bc:52:b7",
+            "c0:21:ad",
+            "c4:4b:53",
+            "c8:5b:17",
+            "cc:8c:bf",
+            "d0:43:67",
+            "d4:28:b2",
+            "d8:71:34",
+            "dc:7b:94",
+            "e0:2c:f8",
+            "e4:ad:3a",
+            "e8:99:77",
+            "ec:b5:12",
+            "f0:b4:10",
+            "f4:8e:09",
+            "f8:0a:4b",
+            "fc:50:2d",
+        ]
+    ),
 }
 
 DEVICE_TYPE_MAP = {
@@ -2007,7 +2544,7 @@ DEVICE_TYPE_MAP = {
 }
 
 
-def lookup_manufacturer(mac):
+def lookup_manufacturer(mac, allow_online=True):
     if not mac or len(mac) < 8:
         return ""
     oui = mac.upper()[:8]
@@ -2016,6 +2553,8 @@ def lookup_manufacturer(mac):
     for manufacturer, pattern_fn in MANUFACTURER_PATTERNS.items():
         if pattern_fn(oui.lower()):
             return manufacturer
+    if allow_online:
+        return lookup_manufacturer_online(mac)
     return ""
 
 

@@ -218,7 +218,7 @@ class MainMenu(CommandMenu):
                         ),
                         host.ip,
                         host.mac,
-                        host.name,
+                        host.name or (lookup_manufacturer(host.mac) or "-"),
                         host.pretty_status(),
                     ]
                 )
@@ -388,10 +388,11 @@ class MainMenu(CommandMenu):
                 x_off = x_rst
 
                 for host, result in host_results:
+                    hname = host.name or (lookup_manufacturer(host.mac) or "")
                     result_data = [
                         str(self._get_host_id(host)),
                         host.ip,
-                        host.name,
+                        hname,
                         "{}↑ {}↓".format(result.upload_rate, result.download_rate),
                         "{}↑ {}↓".format(
                             result.upload_total_size, result.download_total_size
