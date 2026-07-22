@@ -19,6 +19,10 @@ from evillimiter.networking.spoof import ARPSpoofer
 from evillimiter.networking.scan import HostScanner
 from evillimiter.networking.monitor import BandwidthMonitor
 from evillimiter.networking.watch import HostWatcher
+from evillimiter.database.handler import Database
+from evillimiter.fingerprint.oui import lookup_manufacturer, guess_device_type
+from evillimiter.web.server import WebServer
+from evillimiter.notifier.sender import send_notification
 
 
 class MainMenu(CommandMenu):
@@ -106,6 +110,30 @@ class MainMenu(CommandMenu):
 
         self._print_help_reminder()
 
+        # initialize persistent database
+        self.db = Database()
+
+        # load previous hosts from database
+        self._load_hosts_from_db()
+
+        # start the web dashboard & API server
+        port_str = self.db.get_setting("web_port", "5000")
+        port = int(port_str) if port_str else 5000
+        self.web_server = WebServer(
+            self.host_scanner,
+            self.arp_spoofer,
+            self.limiter,
+            self.bandwidth_monitor,
+            self.host_watcher,
+            self.hosts,
+            self.hosts_lock,
+            self.interface,
+            self.gateway_ip,
+            self.gateway_mac,
+            self.netmask,
+        )
+        self.web_server.start(port)
+
         # start the spoof thread
         self.arp_spoofer.start()
         # start the bandwidth monitor thread
@@ -148,6 +176,13 @@ class MainMenu(CommandMenu):
         self.hosts_lock.acquire()
         self.hosts = hosts
         self.hosts_lock.release()
+
+        # save to database with manufacturer info
+        for host in hosts:
+            mfr = lookup_manufacturer(host.mac)
+            dtype = guess_device_type(mfr, host.name)
+            self.db.upsert_host(host.ip, host.mac, host.name, mfr, dtype)
+        self.db.log_activity("scan", "discovered {} hosts".format(len(hosts)))
 
         IO.ok(
             "{}{}{} hosts discovered.".format(
@@ -718,6 +753,17 @@ class MainMenu(CommandMenu):
     def _quit_handler(self, args):
         self.interrupt_handler(False)
         self.stop()
+
+    def _load_hosts_from_db(self):
+        db_hosts = self.db.get_all_hosts()
+        if db_hosts:
+            for entry in db_hosts:
+                host = Host(entry["ip"], entry["mac"], entry["name"] or "")
+                host.name = entry["name"] or ""
+                with self.hosts_lock:
+                    if host not in self.hosts:
+                        self.hosts.append(host)
+            IO.ok("loaded {} hosts from database.".format(len(db_hosts)))
 
     def _get_host_id(self, host, lock=True):
         ret = None

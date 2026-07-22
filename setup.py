@@ -83,6 +83,7 @@ INSTALL_REQUIRES = [
     "tqdm",
     "scapy",
     "terminaltables",
+    "flask",
 ]
 
 CMDCLASS = {"clean": CleanCommand}

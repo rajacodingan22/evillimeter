@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EvilLimiter Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: 'Segoe UI', sans-serif; background: #0f0f14; color: #e0e0e0; min-height: 100vh; }
+header { background: #1a1a24; padding: 16px 24px; border-bottom: 1px solid #2a2a3a; display: flex; align-items: center; gap: 20px; }
+header h1 { color: #ff4444; font-size: 20px; }
+header .info { color: #888; font-size: 13px; margin-left: auto; }
+.container { padding: 20px; max-width: 1400px; margin: 0 auto; }
+
+.card { background: #1a1a24; border: 1px solid #2a2a3a; border-radius: 10px; padding: 16px; margin-bottom: 16px; }
+.card h2 { font-size: 15px; color: #aaa; margin-bottom: 12px; text-transform: uppercase; letter-spacing: 1px; }
+
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 20px; }
+.stat-box { background: #1a1a24; border: 1px solid #2a2a3a; border-radius: 10px; padding: 16px; text-align: center; }
+.stat-box .num { font-size: 28px; font-weight: 700; color: #fff; }
+.stat-box .label { font-size: 12px; color: #888; margin-top: 4px; }
+.stat-box.blue .num { color: #4a9eff; }
+.stat-box.green .num { color: #4caf50; }
+.stat-box.red .num { color: #ff4444; }
+.stat-box.yellow .num { color: #ffc107; }
+
+.toolbar { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
+.toolbar button, .toolbar select, .toolbar input { background: #2a2a3a; border: 1px solid #3a3a4a; color: #e0e0e0; padding: 8px 14px; border-radius: 6px; cursor: pointer; font-size: 13px; }
+.toolbar button:hover { background: #3a3a4a; }
+.toolbar button.success { background: #2e7d32; border-color: #388e3c; }
+.toolbar button.danger { background: #b71c1c; border-color: #c62828; }
+.toolbar button.warning { background: #f57f17; border-color: #f9a825; color: #000; }
+
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th { text-align: left; padding: 10px 8px; border-bottom: 2px solid #2a2a3a; color: #888; font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; }
+td { padding: 10px 8px; border-bottom: 1px solid #1e1e2a; }
+tr:hover td { background: #222230; }
+.tag { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; }
+.tag-limited { background: #ff444422; color: #ff4444; border: 1px solid #ff444455; }
+.tag-blocked { background: #ff000022; color: #ff0000; border: 1px solid #ff000055; }
+.tag-free { background: #4caf5022; color: #4caf50; border: 1px solid #4caf5055; }
+.tag-spoofed { background: #ffc10722; color: #ffc107; }
+.mfr-badge { background: #2a2a3a; padding: 2px 8px; border-radius: 4px; font-size: 11px; }
+
+.charts { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px; }
+@media (max-width: 800px) { .charts { grid-template-columns: 1fr; } }
+
+.activity-log { max-height: 300px; overflow-y: auto; }
+.activity-log div { padding: 6px 0; border-bottom: 1px solid #1e1e2a; font-size: 12px; color: #aaa; }
+.activity-log .time { color: #666; margin-right: 8px; }
+
+.modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 100; justify-content: center; align-items: center; }
+.modal { background: #1a1a24; border: 1px solid #2a2a3a; border-radius: 12px; padding: 24px; min-width: 400px; max-width: 90%; }
+.modal h3 { margin-bottom: 16px; }
+.modal input, .modal select { width: 100%; padding: 10px; margin-bottom: 12px; background: #2a2a3a; border: 1px solid #3a3a4a; color: #e0e0e0; border-radius: 6px; }
+.modal-buttons { display: flex; gap: 8px; justify-content: flex-end; }
+.modal-buttons button { padding: 8px 20px; border-radius: 6px; border: none; cursor: pointer; }
+.modal-buttons .cancel { background: #3a3a4a; color: #e0e0e0; }
+.modal-buttons .confirm { background: #4a9eff; color: #fff; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>EvilLimiter</h1>
+  <span style="color:#888;font-size:13px" id="headerInfo">loading...</span>
+  <div class="info">
+    <span id="hostCount">0</span> hosts &middot;
+    <a href="#" onclick="refreshData()" style="color:#4a9eff;text-decoration:none">&#x21bb;</a>
+  </div>
+</header>
+
+<div class="container">
+
+<div class="stats" id="statsRow"></div>
+
+<div class="card">
+  <div class="toolbar">
+    <button class="success" onclick="scanNetwork()">Scan Network</button>
+    <button onclick="showLimitModal()">Limit</button>
+    <button class="danger" onclick="blockSelected()">Block</button>
+    <button onclick="freeSelected()">Free</button>
+    <button class="warning" onclick="showAddHostModal()">Add Host</button>
+    <button onclick="showSettingsModal()">Settings</button>
+    <span style="margin-left:auto;display:flex;gap:6px;align-items:center">
+      <select id="bulkDirection" style="padding:6px">
+        <option value="both">Both</option>
+        <option value="upload">Upload</option>
+        <option value="download">Download</option>
+      </select>
+      <input type="text" id="bulkRate" placeholder="rate e.g. 100kbit" style="width:120px;padding:6px" value="100kbit">
+    </span>
+  </div>
+  <div style="overflow-x:auto">
+    <table>
+      <thead>
+        <tr>
+          <th style="width:30px"><input type="checkbox" id="selectAll" onchange="toggleAll()"></th>
+          <th>ID</th>
+          <th>IP</th>
+          <th>MAC</th>
+          <th>Name</th>
+          <th>Manufacturer</th>
+          <th>Status</th>
+          <th>Upload</th>
+          <th>Download</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody id="hostsTable"></tbody>
+    </table>
+  </div>
+</div>
+
+<div class="charts">
+  <div class="card">
+    <h2>Bandwidth Overview (top 10)</h2>
+    <canvas id="bandwidthChart" height="200"></canvas>
+  </div>
+  <div class="card">
+    <h2>Activity Log</h2>
+    <div class="activity-log" id="activityLog"></div>
+  </div>
+</div>
+
+</div>
+
+<div class="modal-overlay" id="limitModal">
+  <div class="modal">
+    <h3>Limit Host</h3>
+    <input type="text" id="limitIds" placeholder="IDs (comma separated, or 'all')">
+    <input type="text" id="limitRate" placeholder="Rate (e.g. 100kbit, 1mbit)">
+    <select id="limitDirection">
+      <option value="both">Upload & Download</option>
+      <option value="upload">Upload Only</option>
+      <option value="download">Download Only</option>
+    </select>
+    <div class="modal-buttons">
+      <button class="cancel" onclick="closeModal('limitModal')">Cancel</button>
+      <button class="confirm" onclick="confirmLimit()">Limit</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="addHostModal">
+  <div class="modal">
+    <h3>Add Custom Host</h3>
+    <input type="text" id="addIp" placeholder="IP address">
+    <input type="text" id="addMac" placeholder="MAC address (optional, auto-resolve)">
+    <div class="modal-buttons">
+      <button class="cancel" onclick="closeModal('addHostModal')">Cancel</button>
+      <button class="confirm" onclick="confirmAddHost()">Add</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="settingsModal">
+  <div class="modal">
+    <h3>Settings</h3>
+    <label style="display:block;margin-bottom:4px;color:#888;font-size:12px">Web Port</label>
+    <input type="text" id="setWebPort" placeholder="5000">
+    <label style="display:block;margin-bottom:4px;color:#888;font-size:12px">Telegram Bot Token</label>
+    <input type="text" id="setTelegramToken" placeholder="Bot token">
+    <label style="display:block;margin-bottom:4px;color:#888;font-size:12px">Telegram Chat ID</label>
+    <input type="text" id="setTelegramChatId" placeholder="Chat ID">
+    <label style="display:block;margin-bottom:4px;color:#888;font-size:12px">Discord Webhook URL</label>
+    <input type="text" id="setDiscordWebhook" placeholder="Webhook URL">
+    <div class="modal-buttons">
+      <button class="cancel" onclick="closeModal('settingsModal')">Cancel</button>
+      <button class="confirm" onclick="confirmSettings()">Save</button>
+    </div>
+  </div>
+</div>
+
+<script>
+let hosts = [];
+let bwChart = null;
+
+function closeModal(id) { document.getElementById(id).style.display = 'none'; }
+function showModal(id) { document.getElementById(id).style.display = 'flex'; }
+
+function showLimitModal() { showModal('limitModal'); }
+function showAddHostModal() { showModal('addHostModal'); }
+function showSettingsModal() { showModal('settingsModal'); }
+
+function getSelectedIds() {
+  const cbs = document.querySelectorAll('input[name="hostSel"]:checked');
+  return Array.from(cbs).map(cb => cb.value).join(',');
+}
+
+function toggleAll() {
+  const sel = document.getElementById('selectAll').checked;
+  document.querySelectorAll('input[name="hostSel"]').forEach(cb => cb.checked = sel);
+}
+
+async function fetchJSON(url, opts) {
+  const r = await fetch(url, opts);
+  return r.json();
+}
+
+async function refreshData() {
+  try {
+    hosts = await fetchJSON('/api/hosts');
+    const info = await fetchJSON('/api/info');
+    renderStats(info);
+    renderHosts(hosts);
+    renderChart(hosts);
+  } catch(e) { console.error(e); }
+}
+
+async function refreshActivity() {
+  try {
+    const log = await fetchJSON('/api/activity');
+    const el = document.getElementById('activityLog');
+    el.innerHTML = log.slice(0, 30).map(e =>
+      '<div><span class="time">' + fmtTime(e.timestamp) + '</span>' + e.action + ': ' + e.detail + '</div>'
+    ).join('');
+  } catch(e) {}
+}
+
+function renderStats(info) {
+  document.getElementById('hostCount').textContent = info.host_count || hosts.length;
+  document.getElementById('headerInfo').textContent = info.interface + ' | ' + info.gateway_ip;
+  const limited = hosts.filter(h => h.limited).length;
+  const blocked = hosts.filter(h => h.blocked).length;
+  const free = hosts.filter(h => !h.limited && !h.blocked).length;
+  document.getElementById('statsRow').innerHTML = [
+    { label: 'Total Hosts', num: hosts.length, cls: 'blue' },
+    { label: 'Limited', num: limited, cls: 'red' },
+    { label: 'Blocked', num: blocked, cls: 'red' },
+    { label: 'Free', num: free, cls: 'green' },
+    { label: 'Watched', num: info.watched_count || 0, cls: 'yellow' },
+  ].map(s => '<div class="stat-box ' + s.cls + '"><div class="num">' + s.num + '</div><div class="label">' + s.label + '</div></div>').join('');
+}
+
+function renderHosts(data) {
+  const tbody = document.getElementById('hostsTable');
+  if (!data.length) { tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;padding:30px;color:#666">No hosts. Click "Scan Network" to discover devices.</td></tr>'; return; }
+  tbody.innerHTML = data.map(h => {
+    const statusClass = h.blocked ? 'tag-blocked' : h.limited ? 'tag-limited' : 'tag-free';
+    const statusText = h.blocked ? 'Blocked' : h.limited ? 'Limited' : 'Free';
+    const bw = h.bandwidth || {};
+    return '<tr>' +
+      '<td><input type="checkbox" name="hostSel" value="' + h.id + '"></td>' +
+      '<td>' + h.id + '</td>' +
+      '<td>' + h.ip + '</td>' +
+      '<td style="font-size:11px;color:#888">' + h.mac + '</td>' +
+      '<td>' + (h.name || '-') + '</td>' +
+      '<td><span class="mfr-badge">' + (h.manufacturer || '-') + '</span></td>' +
+      '<td><span class="tag ' + statusClass + '">' + statusText + '</span></td>' +
+      '<td>' + (bw.upload_rate || '0') + '</td>' +
+      '<td>' + (bw.download_rate || '0') + '</td>' +
+      '<td>' +
+        '<button class="success" style="padding:3px 8px;font-size:11px" onclick="quickLimit(' + h.id + ')">L</button> ' +
+        '<button class="danger" style="padding:3px 8px;font-size:11px" onclick="quickBlock(' + h.id + ')">B</button> ' +
+        '<button style="padding:3px 8px;font-size:11px" onclick="quickFree(' + h.id + ')">F</button>' +
+      '</td></tr>';
+  }).join('');
+}
+
+function renderChart(data) {
+  const top = [...data].sort((a,b) => {
+    const au = parseInt((a.bandwidth?.upload_rate || '0').replace(/[^0-9]/g,'')) || 0;
+    const bu = parseInt((b.bandwidth?.upload_rate || '0').replace(/[^0-9]/g,'')) || 0;
+    return bu - au;
+  }).slice(0, 10);
+
+  const ctx = document.getElementById('bandwidthChart').getContext('2d');
+  if (bwChart) bwChart.destroy();
+
+  bwChart = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: top.map(h => h.name || h.ip),
+      datasets: [{
+        label: 'Upload',
+        data: top.map(h => parseInt((h.bandwidth?.upload_rate || '0').replace(/[^0-9]/g,'')) || 0),
+        backgroundColor: '#ff444488',
+        borderColor: '#ff4444',
+        borderWidth: 1
+      }, {
+        label: 'Download',
+        data: top.map(h => parseInt((h.bandwidth?.download_rate || '0').replace(/[^0-9]/g,'')) || 0),
+        backgroundColor: '#4a9eff88',
+        borderColor: '#4a9eff',
+        borderWidth: 1
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { labels: { color: '#aaa', font: { size: 11 } } } },
+      scales: {
+        x: { ticks: { color: '#888', font: { size: 10 } }, grid: { color: '#2a2a3a' } },
+        y: { ticks: { color: '#888', font: { size: 10 } }, grid: { color: '#2a2a3a' }, beginAtZero: true }
+      }
+    }
+  });
+}
+
+function fmtTime(ts) {
+  const d = new Date(ts * 1000);
+  return d.toLocaleTimeString();
+}
+
+async function scanNetwork() {
+  document.querySelector('.toolbar button.success').textContent = 'Scanning...';
+  await fetchJSON('/api/hosts/scan', { method: 'POST' });
+  setTimeout(async () => {
+    await refreshData();
+    await refreshActivity();
+    document.querySelector('.toolbar button.success').textContent = 'Scan Network';
+  }, 5000);
+}
+
+async function quickLimit(id) {
+  const rate = document.getElementById('bulkRate').value || '100kbit';
+  const dir = document.getElementById('bulkDirection').value;
+  await fetchJSON('/api/hosts/limit', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ ids: String(id), rate, direction: dir })
+  });
+  await refreshData();
+}
+
+async function quickBlock(id) {
+  const dir = document.getElementById('bulkDirection').value;
+  await fetchJSON('/api/hosts/block', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ ids: String(id), direction: dir })
+  });
+  await refreshData();
+}
+
+async function quickFree(id) {
+  await fetchJSON('/api/hosts/free', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ ids: String(id) })
+  });
+  await refreshData();
+}
+
+async function blockSelected() {
+  const ids = getSelectedIds();
+  if (!ids) return;
+  const dir = document.getElementById('bulkDirection').value;
+  await fetchJSON('/api/hosts/block', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ ids, direction: dir })
+  });
+  await refreshData();
+}
+
+async function freeSelected() {
+  const ids = getSelectedIds();
+  if (!ids) return;
+  await fetchJSON('/api/hosts/free', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ ids })
+  });
+  await refreshData();
+}
+
+async function confirmLimit() {
+  const ids = document.getElementById('limitIds').value;
+  const rate = document.getElementById('limitRate').value;
+  const dir = document.getElementById('limitDirection').value;
+  await fetchJSON('/api/hosts/limit', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ ids, rate, direction: dir })
+  });
+  closeModal('limitModal');
+  await refreshData();
+}
+
+async function confirmAddHost() {
+  const ip = document.getElementById('addIp').value;
+  const mac = document.getElementById('addMac').value;
+  const r = await fetchJSON('/api/hosts/add', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ ip, mac })
+  });
+  closeModal('addHostModal');
+  if (r.error) { alert(r.error); return; }
+  await refreshData();
+}
+
+async function confirmSettings() {
+  const body = {
+    web_port: document.getElementById('setWebPort').value,
+    telegram_token: document.getElementById('setTelegramToken').value,
+    telegram_chat_id: document.getElementById('setTelegramChatId').value,
+    discord_webhook: document.getElementById('setDiscordWebhook').value,
+  };
+  await fetchJSON('/api/settings', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify(body)
+  });
+  closeModal('settingsModal');
+}
+
+async function loadSettings() {
+  try {
+    const s = await fetchJSON('/api/settings');
+    document.getElementById('setWebPort').value = s.web_port || '5000';
+    document.getElementById('setTelegramToken').value = s.telegram_token || '';
+    document.getElementById('setTelegramChatId').value = s.telegram_chat_id || '';
+    document.getElementById('setDiscordWebhook').value = s.discord_webhook || '';
+  } catch(e) {}
+}
+
+refreshData();
+refreshActivity();
+loadSettings();
+setInterval(refreshData, 3000);
+setInterval(refreshActivity, 5000);
+</script>
+</body>
+</html>
