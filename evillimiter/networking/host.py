@@ -12,15 +12,17 @@ class Host(object):
         self.watched = False
 
     def __eq__(self, other):
-        return self.ip == other.ip
+        if not isinstance(other, Host):
+            return NotImplemented
+        return self.mac == other.mac and self.ip == other.ip
 
     def __hash__(self):
-        return hash((self.mac, self.ip))
+        return hash(self.ip)
 
     def pretty_status(self):
         if self.limited:
-            return '{}Limited{}'.format(IO.Fore.LIGHTRED_EX, IO.Style.RESET_ALL)
+            return "{}Limited{}".format(IO.Fore.LIGHTRED_EX, IO.Style.RESET_ALL)
         elif self.blocked:
-            return '{}Blocked{}'.format(IO.Fore.RED, IO.Style.RESET_ALL)
+            return "{}Blocked{}".format(IO.Fore.RED, IO.Style.RESET_ALL)
         else:
-            return 'Free'
+            return "Free"

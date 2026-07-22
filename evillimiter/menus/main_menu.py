@@ -2,6 +2,7 @@ import time
 import socket
 import curses
 import netaddr
+import netaddr.core
 import threading
 import collections
 from terminaltables import SingleTable
@@ -23,63 +24,75 @@ from evillimiter.networking.watch import HostWatcher
 class MainMenu(CommandMenu):
     def __init__(self, version, interface, gateway_ip, gateway_mac, netmask):
         super().__init__()
-        self.prompt = '({}Main{}) >>> '.format(IO.Style.BRIGHT, IO.Style.RESET_ALL)
-        self.parser.add_subparser('clear', self._clear_handler)
+        self.prompt = "({}Main{}) >>> ".format(IO.Style.BRIGHT, IO.Style.RESET_ALL)
+        self.parser.add_subparser("clear", self._clear_handler)
 
-        hosts_parser = self.parser.add_subparser('hosts', self._hosts_handler)
-        hosts_parser.add_flag('--force', 'force')
+        hosts_parser = self.parser.add_subparser("hosts", self._hosts_handler)
+        hosts_parser.add_flag("--force", "force")
 
-        scan_parser = self.parser.add_subparser('scan', self._scan_handler)
-        scan_parser.add_parameterized_flag('--range', 'iprange')
+        scan_parser = self.parser.add_subparser("scan", self._scan_handler)
+        scan_parser.add_parameterized_flag("--range", "iprange")
 
-        limit_parser = self.parser.add_subparser('limit', self._limit_handler)
-        limit_parser.add_parameter('id')
-        limit_parser.add_parameter('rate')
-        limit_parser.add_flag('--upload', 'upload')
-        limit_parser.add_flag('--download', 'download')
+        limit_parser = self.parser.add_subparser("limit", self._limit_handler)
+        limit_parser.add_parameter("id")
+        limit_parser.add_parameter("rate")
+        limit_parser.add_flag("--upload", "upload")
+        limit_parser.add_flag("--download", "download")
 
-        block_parser = self.parser.add_subparser('block', self._block_handler)
-        block_parser.add_parameter('id')
-        block_parser.add_flag('--upload', 'upload')
-        block_parser.add_flag('--download', 'download')
+        block_parser = self.parser.add_subparser("block", self._block_handler)
+        block_parser.add_parameter("id")
+        block_parser.add_flag("--upload", "upload")
+        block_parser.add_flag("--download", "download")
 
-        free_parser = self.parser.add_subparser('free', self._free_handler)
-        free_parser.add_parameter('id')
+        free_parser = self.parser.add_subparser("free", self._free_handler)
+        free_parser.add_parameter("id")
 
-        add_parser = self.parser.add_subparser('add', self._add_handler)
-        add_parser.add_parameter('ip')
-        add_parser.add_parameterized_flag('--mac', 'mac')
+        add_parser = self.parser.add_subparser("add", self._add_handler)
+        add_parser.add_parameter("ip")
+        add_parser.add_parameterized_flag("--mac", "mac")
 
-        monitor_parser = self.parser.add_subparser('monitor', self._monitor_handler)
-        monitor_parser.add_parameterized_flag('--interval', 'interval')
+        monitor_parser = self.parser.add_subparser("monitor", self._monitor_handler)
+        monitor_parser.add_parameterized_flag("--interval", "interval")
 
-        analyze_parser = self.parser.add_subparser('analyze', self._analyze_handler)
-        analyze_parser.add_parameter('id')
-        analyze_parser.add_parameterized_flag('--duration', 'duration')
+        analyze_parser = self.parser.add_subparser("analyze", self._analyze_handler)
+        analyze_parser.add_parameter("id")
+        analyze_parser.add_parameterized_flag("--duration", "duration")
 
-        watch_parser = self.parser.add_subparser('watch', self._watch_handler)
-        watch_add_parser = watch_parser.add_subparser('add', self._watch_add_handler)
-        watch_add_parser.add_parameter('id')
-        watch_remove_parser = watch_parser.add_subparser('remove', self._watch_remove_handler)
-        watch_remove_parser.add_parameter('id')
-        watch_set_parser = watch_parser.add_subparser('set', self._watch_set_handler)
-        watch_set_parser.add_parameter('attribute')
-        watch_set_parser.add_parameter('value')
+        watch_parser = self.parser.add_subparser("watch", self._watch_handler)
+        watch_add_parser = watch_parser.add_subparser("add", self._watch_add_handler)
+        watch_add_parser.add_parameter("id")
+        watch_remove_parser = watch_parser.add_subparser(
+            "remove", self._watch_remove_handler
+        )
+        watch_remove_parser.add_parameter("id")
+        watch_set_parser = watch_parser.add_subparser("set", self._watch_set_handler)
+        watch_set_parser.add_parameter("attribute")
+        watch_set_parser.add_parameter("value")
 
-        self.parser.add_subparser('help', self._help_handler)
-        self.parser.add_subparser('?', self._help_handler)
+        self.parser.add_subparser("help", self._help_handler)
+        self.parser.add_subparser("?", self._help_handler)
 
-        self.parser.add_subparser('quit', self._quit_handler)
-        self.parser.add_subparser('exit', self._quit_handler)
+        self.parser.add_subparser("quit", self._quit_handler)
+        self.parser.add_subparser("exit", self._quit_handler)
 
-        self.version = version          # application version
-        self.interface = interface      # specified IPv4 interface
-        self.gateway_ip = gateway_ip 
+        self.version = version  # application version
+        self.interface = interface  # specified IPv4 interface
+        self.gateway_ip = gateway_ip
         self.gateway_mac = gateway_mac
         self.netmask = netmask
 
         # range of IP address calculated from gateway IP and netmask
-        self.iprange = list(netaddr.IPNetwork('{}/{}'.format(self.gateway_ip, self.netmask)))
+        try:
+            self.iprange = list(
+                netaddr.IPNetwork("{}/{}".format(self.gateway_ip, self.netmask))
+            )
+        except netaddr.core.AddrFormatError:
+            IO.error(
+                "invalid network configuration (ip: {}, netmask: {}).".format(
+                    self.gateway_ip, self.netmask
+                )
+            )
+            self.iprange = []
 
         self.host_scanner = HostScanner(self.interface, self.iprange)
         self.arp_spoofer = ARPSpoofer(self.interface, self.gateway_ip, self.gateway_mac)
@@ -104,7 +117,7 @@ class MainMenu(CommandMenu):
         if ctrl_c:
             IO.spacer()
 
-        IO.ok('cleaning up... stand by...')
+        IO.ok("cleaning up... stand by...")
 
         self.arp_spoofer.stop()
         self.bandwidth_monitor.stop()
@@ -120,7 +133,7 @@ class MainMenu(CommandMenu):
         if args.iprange:
             iprange = self._parse_iprange(args.iprange)
             if iprange is None:
-                IO.error('invalid ip range.')
+                IO.error("invalid ip range.")
                 return
         else:
             iprange = None
@@ -128,7 +141,7 @@ class MainMenu(CommandMenu):
         with self.hosts_lock:
             for host in self.hosts:
                 self._free_host(host)
-            
+
         IO.spacer()
         hosts = self.host_scanner.scan(iprange)
 
@@ -136,7 +149,11 @@ class MainMenu(CommandMenu):
         self.hosts = hosts
         self.hosts_lock.release()
 
-        IO.ok('{}{}{} hosts discovered.'.format(IO.Fore.LIGHTYELLOW_EX, len(hosts), IO.Style.RESET_ALL))
+        IO.ok(
+            "{}{}{} hosts discovered.".format(
+                IO.Fore.LIGHTYELLOW_EX, len(hosts), IO.Style.RESET_ALL
+            )
+        )
         IO.spacer()
 
     def _hosts_handler(self, args):
@@ -144,28 +161,38 @@ class MainMenu(CommandMenu):
         Handles 'hosts' command-line argument
         Displays discovered hosts
         """
-        table_data = [[
-            '{}ID{}'.format(IO.Style.BRIGHT, IO.Style.RESET_ALL),
-            '{}IP address{}'.format(IO.Style.BRIGHT, IO.Style.RESET_ALL),
-            '{}MAC address{}'.format(IO.Style.BRIGHT, IO.Style.RESET_ALL),
-            '{}Hostname{}'.format(IO.Style.BRIGHT, IO.Style.RESET_ALL),
-            '{}Status{}'.format(IO.Style.BRIGHT, IO.Style.RESET_ALL)
-        ]]
-        
+        table_data = [
+            [
+                "{}ID{}".format(IO.Style.BRIGHT, IO.Style.RESET_ALL),
+                "{}IP address{}".format(IO.Style.BRIGHT, IO.Style.RESET_ALL),
+                "{}MAC address{}".format(IO.Style.BRIGHT, IO.Style.RESET_ALL),
+                "{}Hostname{}".format(IO.Style.BRIGHT, IO.Style.RESET_ALL),
+                "{}Status{}".format(IO.Style.BRIGHT, IO.Style.RESET_ALL),
+            ]
+        ]
+
         with self.hosts_lock:
             for host in self.hosts:
-                table_data.append([
-                    '{}{}{}'.format(IO.Fore.LIGHTYELLOW_EX, self._get_host_id(host, lock=False), IO.Style.RESET_ALL),
-                    host.ip,
-                    host.mac,
-                    host.name,
-                    host.pretty_status()
-                ])
+                table_data.append(
+                    [
+                        "{}{}{}".format(
+                            IO.Fore.LIGHTYELLOW_EX,
+                            self._get_host_id(host, lock=False),
+                            IO.Style.RESET_ALL,
+                        ),
+                        host.ip,
+                        host.mac,
+                        host.name,
+                        host.pretty_status(),
+                    ]
+                )
 
-        table = SingleTable(table_data, 'Hosts')
+        table = SingleTable(table_data, "Hosts")
 
         if not args.force and not table.ok:
-            IO.error('table does not fit terminal. resize or decrease font size. you can also force the display (--force).')
+            IO.error(
+                "table does not fit terminal. resize or decrease font size. you can also force the display (--force)."
+            )
             return
 
         IO.spacer()
@@ -184,7 +211,7 @@ class MainMenu(CommandMenu):
         try:
             rate = BitRate.from_rate_string(args.rate)
         except Exception:
-            IO.error('limit rate is invalid.')
+            IO.error("limit rate is invalid.")
             return
 
         direction = self._parse_direction_args(args)
@@ -194,7 +221,16 @@ class MainMenu(CommandMenu):
             self.limiter.limit(host, direction, rate)
             self.bandwidth_monitor.add(host)
 
-            IO.ok('{}{}{r} {} {}limited{r} to {}.'.format(IO.Fore.LIGHTYELLOW_EX, host.ip, Direction.pretty_direction(direction), IO.Fore.LIGHTRED_EX, rate, r=IO.Style.RESET_ALL))
+            IO.ok(
+                "{}{}{r} {} {}limited{r} to {}.".format(
+                    IO.Fore.LIGHTYELLOW_EX,
+                    host.ip,
+                    Direction.pretty_direction(direction),
+                    IO.Fore.LIGHTRED_EX,
+                    rate,
+                    r=IO.Style.RESET_ALL,
+                )
+            )
 
     def _block_handler(self, args):
         """
@@ -211,7 +247,15 @@ class MainMenu(CommandMenu):
 
                 self.limiter.block(host, direction)
                 self.bandwidth_monitor.add(host)
-                IO.ok('{}{}{r} {} {}blocked{r}.'.format(IO.Fore.LIGHTYELLOW_EX, host.ip, Direction.pretty_direction(direction), IO.Fore.RED, r=IO.Style.RESET_ALL))
+                IO.ok(
+                    "{}{}{r} {} {}blocked{r}.".format(
+                        IO.Fore.LIGHTYELLOW_EX,
+                        host.ip,
+                        Direction.pretty_direction(direction),
+                        IO.Fore.RED,
+                        r=IO.Style.RESET_ALL,
+                    )
+                )
 
     def _free_handler(self, args):
         """
@@ -230,18 +274,18 @@ class MainMenu(CommandMenu):
         """
         ip = args.ip
         if not netutils.validate_ip_address(ip):
-            IO.error('invalid ip address.')
+            IO.error("invalid ip address.")
             return
 
         if args.mac:
             mac = args.mac
             if not netutils.validate_mac_address(mac):
-                IO.error('invalid mac address.')
+                IO.error("invalid mac address.")
                 return
         else:
             mac = netutils.get_mac_by_ip(self.interface, ip)
             if mac is None:
-                IO.error('unable to resolve mac address. specify manually (--mac).')
+                IO.error("unable to resolve mac address. specify manually (--mac).")
                 return
 
         name = None
@@ -255,29 +299,38 @@ class MainMenu(CommandMenu):
 
         with self.hosts_lock:
             if host in self.hosts:
-                IO.error('host does already exist.')
+                IO.error("host does already exist.")
                 return
 
-            self.hosts.append(host) 
+            self.hosts.append(host)
 
-        IO.ok('host added.')
+        IO.ok("host added.")
 
     def _monitor_handler(self, args):
         """
         Handles 'monitor' command-line argument
         Monitors hosts bandwidth usage
         """
+
         def get_bandwidth_results():
             with self.hosts_lock:
-                return [x for x in [(y, self.bandwidth_monitor.get(y)) for y in self.hosts] if x[1] is not None]
+                return [
+                    x
+                    for x in [(y, self.bandwidth_monitor.get(y)) for y in self.hosts]
+                    if x[1] is not None
+                ]
 
         def display(stdscr, interval):
             host_results = get_bandwidth_results()
             hname_max_len = max([len(x[0].name) for x in host_results])
 
             header_off = [
-                ('ID', 5), ('IP address', 18), ('Hostname', hname_max_len + 2),
-                ('Current (per s)', 20), ('Total', 16), ('Packets', 0)
+                ("ID", 5),
+                ("IP address", 18),
+                ("Hostname", hname_max_len + 2),
+                ("Current (per s)", 20),
+                ("Total", 16),
+                ("Packets", 0),
             ]
 
             y_rst = 1
@@ -301,9 +354,13 @@ class MainMenu(CommandMenu):
                         str(self._get_host_id(host)),
                         host.ip,
                         host.name,
-                        '{}↑ {}↓'.format(result.upload_rate, result.download_rate),
-                        '{}↑ {}↓'.format(result.upload_total_size, result.download_total_size),
-                        '{}↑ {}↓'.format(result.upload_total_count, result.download_total_count)
+                        "{}↑ {}↓".format(result.upload_rate, result.download_rate),
+                        "{}↑ {}↓".format(
+                            result.upload_total_size, result.download_total_size
+                        ),
+                        "{}↑ {}↓".format(
+                            result.upload_total_count, result.download_total_count
+                        ),
                     ]
 
                     for j, string in enumerate(result_data):
@@ -314,7 +371,7 @@ class MainMenu(CommandMenu):
                     x_off = x_rst
 
                 y_off += 2
-                stdscr.addstr(y_off, x_off, 'press \'ctrl+c\' to exit.')
+                stdscr.addstr(y_off, x_off, "press 'ctrl+c' to exit.")
 
                 try:
                     stdscr.refresh()
@@ -322,35 +379,34 @@ class MainMenu(CommandMenu):
                     host_results = get_bandwidth_results()
                 except KeyboardInterrupt:
                     return
-                    
 
         interval = 0.5  # in s
         if args.interval:
             if not args.interval.isdigit():
-                IO.error('invalid interval.')
+                IO.error("invalid interval.")
                 return
 
-            interval = int(args.interval) / 1000    # from ms to s
+            interval = int(args.interval) / 1000  # from ms to s
 
         if len(get_bandwidth_results()) == 0:
-            IO.error('no hosts to be monitored.')
+            IO.error("no hosts to be monitored.")
             return
 
         try:
             curses.wrapper(display, interval)
         except curses.error:
-            IO.error('monitor error occurred. maybe terminal too small?')
+            IO.error("monitor error occurred. maybe terminal too small?")
 
     def _analyze_handler(self, args):
         hosts = self._get_hosts_by_ids(args.id)
         if hosts is None or len(hosts) == 0:
-            IO.error('no hosts to be analyzed.')
+            IO.error("no hosts to be analyzed.")
             return
-        
-        duration = 30 # in s
+
+        duration = 30  # in s
         if args.duration:
             if not args.duration.isdigit():
-                IO.error('invalid duration.')
+                IO.error("invalid duration.")
                 return
 
             duration = int(args.duration)
@@ -367,9 +423,12 @@ class MainMenu(CommandMenu):
 
             host_result = self.bandwidth_monitor.get(host)
             host_values[host] = {}
-            host_values[host]['prev'] = (host_result.upload_total_size, host_result.download_total_size)
+            host_values[host]["prev"] = (
+                host_result.upload_total_size,
+                host_result.download_total_size,
+            )
 
-        IO.ok('analyzing traffic for {}s.'.format(duration))
+        IO.ok("analyzing traffic for {}s.".format(duration))
         time.sleep(duration)
 
         error_occurred = False
@@ -378,12 +437,15 @@ class MainMenu(CommandMenu):
 
             if host_result is None:
                 # host reconnected during analysis
-                IO.error('host reconnected during analysis.')
+                IO.error("host reconnected during analysis.")
                 error_occurred = True
             else:
-                host_values[host]['current'] = (host_result.upload_total_size, host_result.download_total_size)
+                host_values[host]["current"] = (
+                    host_result.upload_total_size,
+                    host_result.download_total_size,
+                )
 
-        IO.ok('cleaning up...')
+        IO.ok("cleaning up...")
         for host in hosts_to_be_freed:
             self._free_host(host)
 
@@ -394,20 +456,26 @@ class MainMenu(CommandMenu):
         download_chart = BarChart(max_bar_length=29)
 
         for host in hosts:
-            upload_value = host_values[host]['current'][0] - host_values[host]['prev'][0]
-            download_value = host_values[host]['current'][1] - host_values[host]['prev'][1]
-
-            prefix = '{}{}{} ({}, {})'.format(
-                IO.Fore.LIGHTYELLOW_EX, self._get_host_id(host), IO.Style.RESET_ALL,
-                host.ip,
-                host.name
+            upload_value = (
+                host_values[host]["current"][0] - host_values[host]["prev"][0]
             )
-            
+            download_value = (
+                host_values[host]["current"][1] - host_values[host]["prev"][1]
+            )
+
+            prefix = "{}{}{} ({}, {})".format(
+                IO.Fore.LIGHTYELLOW_EX,
+                self._get_host_id(host),
+                IO.Style.RESET_ALL,
+                host.ip,
+                host.name,
+            )
+
             upload_chart.add_value(upload_value.value, prefix, upload_value)
             download_chart.add_value(download_value.value, prefix, download_value)
 
-        upload_table = SingleTable([[upload_chart.get()]], 'Upload')
-        download_table = SingleTable([[download_chart.get()]], 'Download')
+        upload_table = SingleTable([[upload_chart.get()]], "Upload")
+        download_table = SingleTable([[download_chart.get()]], "Download")
 
         upload_table.inner_heading_row_border = False
         download_table.inner_heading_row_border = False
@@ -419,55 +487,70 @@ class MainMenu(CommandMenu):
 
     def _watch_handler(self, args):
         if len(args) == 0:
-            watch_table_data = [[
-                '{}ID{}'.format(IO.Style.BRIGHT, IO.Style.RESET_ALL),
-                '{}IP address{}'.format(IO.Style.BRIGHT, IO.Style.RESET_ALL),
-                '{}MAC address{}'.format(IO.Style.BRIGHT, IO.Style.RESET_ALL)
-            ]]
+            watch_table_data = [
+                [
+                    "{}ID{}".format(IO.Style.BRIGHT, IO.Style.RESET_ALL),
+                    "{}IP address{}".format(IO.Style.BRIGHT, IO.Style.RESET_ALL),
+                    "{}MAC address{}".format(IO.Style.BRIGHT, IO.Style.RESET_ALL),
+                ]
+            ]
 
-            set_table_data = [[
-                '{}Attribute{}'.format(IO.Style.BRIGHT, IO.Style.RESET_ALL),
-                '{}Value{}'.format(IO.Style.BRIGHT, IO.Style.RESET_ALL)
-            ]]
+            set_table_data = [
+                [
+                    "{}Attribute{}".format(IO.Style.BRIGHT, IO.Style.RESET_ALL),
+                    "{}Value{}".format(IO.Style.BRIGHT, IO.Style.RESET_ALL),
+                ]
+            ]
 
-            hist_table_data = [[
-                '{}ID{}'.format(IO.Style.BRIGHT, IO.Style.RESET_ALL),
-                '{}Old IP address{}'.format(IO.Style.BRIGHT, IO.Style.RESET_ALL),
-                '{}New IP address{}'.format(IO.Style.BRIGHT, IO.Style.RESET_ALL),
-                '{}Time{}'.format(IO.Style.BRIGHT, IO.Style.RESET_ALL)
-            ]]
+            hist_table_data = [
+                [
+                    "{}ID{}".format(IO.Style.BRIGHT, IO.Style.RESET_ALL),
+                    "{}Old IP address{}".format(IO.Style.BRIGHT, IO.Style.RESET_ALL),
+                    "{}New IP address{}".format(IO.Style.BRIGHT, IO.Style.RESET_ALL),
+                    "{}Time{}".format(IO.Style.BRIGHT, IO.Style.RESET_ALL),
+                ]
+            ]
 
             iprange = self.host_watcher.iprange
             interval = self.host_watcher.interval
 
-            set_table_data.append([
-                '{}range{}'.format(IO.Fore.LIGHTYELLOW_EX, IO.Style.RESET_ALL),
-                '{} addresses'.format(len(iprange)) if iprange is not None else 'default'
-            ])
+            set_table_data.append(
+                [
+                    "{}range{}".format(IO.Fore.LIGHTYELLOW_EX, IO.Style.RESET_ALL),
+                    "{} addresses".format(len(iprange))
+                    if iprange is not None
+                    else "default",
+                ]
+            )
 
-            set_table_data.append([
-                '{}interval{}'.format(IO.Fore.LIGHTYELLOW_EX, IO.Style.RESET_ALL),
-                '{}s'.format(interval)
-            ])
+            set_table_data.append(
+                [
+                    "{}interval{}".format(IO.Fore.LIGHTYELLOW_EX, IO.Style.RESET_ALL),
+                    "{}s".format(interval),
+                ]
+            )
 
             for host in self.host_watcher.hosts:
-                watch_table_data.append([
-                    '{}{}{}'.format(IO.Fore.LIGHTYELLOW_EX, self._get_host_id(host), IO.Style.RESET_ALL),
-                    host.ip,
-                    host.mac
-                ])
+                watch_table_data.append(
+                    [
+                        "{}{}{}".format(
+                            IO.Fore.LIGHTYELLOW_EX,
+                            self._get_host_id(host),
+                            IO.Style.RESET_ALL,
+                        ),
+                        host.ip,
+                        host.mac,
+                    ]
+                )
 
             for recon in self.host_watcher.log_list:
-                hist_table_data.append([
-                    recon['old'].mac,
-                    recon['old'].ip,
-                    recon['new'].ip,
-                    recon['time']
-                ])
+                hist_table_data.append(
+                    [recon["old"].mac, recon["old"].ip, recon["new"].ip, recon["time"]]
+                )
 
             watch_table = SingleTable(watch_table_data, "Watchlist")
             set_table = SingleTable(set_table_data, "Settings")
-            hist_table = SingleTable(hist_table_data, 'Reconnection History')
+            hist_table = SingleTable(hist_table_data, "Reconnection History")
 
             IO.spacer()
             IO.print(watch_table.table)
@@ -506,19 +589,23 @@ class MainMenu(CommandMenu):
         Handles 'watch set' command-line argument
         Modifies settings of the reconnection reconnection watcher
         """
-        if args.attribute.lower() in ('range', 'iprange', 'ip_range'):
+        if args.attribute.lower() in ("range", "iprange", "ip_range"):
             iprange = self._parse_iprange(args.value)
             if iprange is not None:
                 self.host_watcher.iprange = iprange
             else:
-                IO.error('invalid ip range.')
-        elif args.attribute.lower() in ('interval'):
+                IO.error("invalid ip range.")
+        elif args.attribute.lower() in ("interval"):
             if args.value.isdigit():
                 self.host_watcher.interval = int(args.value)
             else:
-                IO.error('invalid interval.')
+                IO.error("invalid interval.")
         else:
-            IO.error('{}{}{} is an invalid settings attribute.'.format(IO.Fore.LIGHTYELLOW_EX, args.attribute, IO.Style.RESET_ALL))
+            IO.error(
+                "{}{}{} is an invalid settings attribute.".format(
+                    IO.Fore.LIGHTYELLOW_EX, args.attribute, IO.Style.RESET_ALL
+                )
+            )
 
     def _reconnect_callback(self, old_host, new_host):
         """
@@ -554,7 +641,7 @@ class MainMenu(CommandMenu):
         Handles 'help' command-line argument
         Prints help message including commands and usage
         """
-        spaces = ' ' * 35
+        spaces = " " * 35
 
         IO.print(
             """
@@ -604,26 +691,28 @@ class MainMenu(CommandMenu):
 
 {y}quit{r}{}quits the application.
             """.format(
-                    spaces[len('scan (--range [IP range])'):],
-                    spaces[len('hosts (--force)'):],
-                    spaces[len('limit [ID1,ID2,...] [rate]'):],
-                    spaces[len('      (--upload) (--download)'):],
-                    spaces[len('block [ID1,ID2,...]'):],
-                    spaces[len('      (--upload) (--download)'):],
-                    spaces[len('free [ID1,ID2,...]'):],
-                    spaces[len('add [IP] (--mac [MAC])'):],
-                    spaces[len('monitor (--interval [time in ms])'):],
-                    spaces[len('analyze [ID1,ID2,...]'):],
-                    spaces[len('        (--duration [time in s])'):],
-                    spaces[len('watch'):],
-                    spaces[len('watch add [ID1,ID2,...]'):],
-                    spaces[len('watch remove [ID1,ID2,...]'):],
-                    spaces[len('watch set [attr] [value]'):],
-                    spaces[len('clear'):],
-                    spaces[len('quit'):],
-                    y=IO.Fore.LIGHTYELLOW_EX, r=IO.Style.RESET_ALL, b=IO.Style.BRIGHT,
-                    s=spaces
-                )
+                spaces[len("scan (--range [IP range])") :],
+                spaces[len("hosts (--force)") :],
+                spaces[len("limit [ID1,ID2,...] [rate]") :],
+                spaces[len("      (--upload) (--download)") :],
+                spaces[len("block [ID1,ID2,...]") :],
+                spaces[len("      (--upload) (--download)") :],
+                spaces[len("free [ID1,ID2,...]") :],
+                spaces[len("add [IP] (--mac [MAC])") :],
+                spaces[len("monitor (--interval [time in ms])") :],
+                spaces[len("analyze [ID1,ID2,...]") :],
+                spaces[len("        (--duration [time in s])") :],
+                spaces[len("watch") :],
+                spaces[len("watch add [ID1,ID2,...]") :],
+                spaces[len("watch remove [ID1,ID2,...]") :],
+                spaces[len("watch set [attr] [value]") :],
+                spaces[len("clear") :],
+                spaces[len("quit") :],
+                y=IO.Fore.LIGHTYELLOW_EX,
+                r=IO.Style.RESET_ALL,
+                b=IO.Style.BRIGHT,
+                s=spaces,
+            )
         )
 
     def _quit_handler(self, args):
@@ -640,21 +729,25 @@ class MainMenu(CommandMenu):
             if host_ == host:
                 ret = i
                 break
-        
+
         if lock:
             self.hosts_lock.release()
 
         return ret
 
     def _print_help_reminder(self):
-        IO.print('type {Y}help{R} or {Y}?{R} to show command information.'.format(Y=IO.Fore.LIGHTYELLOW_EX, R=IO.Style.RESET_ALL))
+        IO.print(
+            "type {Y}help{R} or {Y}?{R} to show command information.".format(
+                Y=IO.Fore.LIGHTYELLOW_EX, R=IO.Style.RESET_ALL
+            )
+        )
 
     def _get_hosts_by_ids(self, ids_string):
-        if ids_string == 'all':
+        if ids_string == "all":
             with self.hosts_lock:
                 return self.hosts.copy()
 
-        ids = ids_string.split(',')
+        ids = ids_string.split(",")
         hosts = set()
 
         with self.hosts_lock:
@@ -664,7 +757,7 @@ class MainMenu(CommandMenu):
                 is_id_ = id_.isdigit()
 
                 if not is_mac and not is_ip and not is_id_:
-                    IO.error('invalid identifier(s): \'{}\'.'.format(ids_string))
+                    IO.error("invalid identifier(s): '{}'.".format(ids_string))
                     return
 
                 if is_mac or is_ip:
@@ -675,12 +768,20 @@ class MainMenu(CommandMenu):
                             hosts.add(host)
                             break
                     if not found:
-                        IO.error('no host matching {}{}{}.'.format(IO.Fore.LIGHTYELLOW_EX, id_, IO.Style.RESET_ALL))
+                        IO.error(
+                            "no host matching {}{}{}.".format(
+                                IO.Fore.LIGHTYELLOW_EX, id_, IO.Style.RESET_ALL
+                            )
+                        )
                         return
                 else:
                     id_ = int(id_)
                     if len(self.hosts) == 0 or id_ not in range(len(self.hosts)):
-                        IO.error('no host with id {}{}{}.'.format(IO.Fore.LIGHTYELLOW_EX, id_, IO.Style.RESET_ALL))
+                        IO.error(
+                            "no host with id {}{}{}.".format(
+                                IO.Fore.LIGHTYELLOW_EX, id_, IO.Style.RESET_ALL
+                            )
+                        )
                         return
                     hosts.add(self.hosts[id_])
 
@@ -698,8 +799,8 @@ class MainMenu(CommandMenu):
 
     def _parse_iprange(self, range):
         try:
-            if '-' in range:
-                return list(netaddr.iter_iprange(*range.split('-')))
+            if "-" in range:
+                return list(netaddr.iter_iprange(*range.split("-")))
             else:
                 return list(netaddr.IPNetwork(range))
         except netaddr.core.AddrFormatError:
