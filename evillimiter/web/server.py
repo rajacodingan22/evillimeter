@@ -24,6 +24,7 @@ class WebServer:
         gateway_ip,
         gateway_mac,
         netmask,
+        db=None,
     ):
         self.host_scanner = host_scanner
         self.arp_spoofer = arp_spoofer
@@ -37,7 +38,7 @@ class WebServer:
         self.gateway_mac = gateway_mac
         self.netmask = netmask
 
-        self.db = Database()
+        self.db = db if db is not None else Database()
         self._server_thread = None
         self._running = False
 
@@ -112,8 +113,9 @@ class WebServer:
         def api_scan():
             def do_scan():
                 with self.hosts_lock:
-                    for host in self.hosts_list:
-                        pass
+                    old_hosts = self.hosts_list.copy()
+                for host in old_hosts:
+                    self._free_host(host)
                 new_hosts = self.host_scanner.scan()
                 with self.hosts_lock:
                     self.hosts_list.clear()
@@ -152,6 +154,7 @@ class WebServer:
                 self.arp_spoofer.add(host)
                 self.limiter.limit(host, d, rate_obj)
                 self.bandwidth_monitor.add(host)
+                self.host_watcher.add(host)
                 self.db.set_limit(host.mac, rate, direction)
                 self.db.log_activity(
                     "limit",
@@ -180,6 +183,7 @@ class WebServer:
                     self.arp_spoofer.add(host)
                 self.limiter.block(host, d)
                 self.bandwidth_monitor.add(host)
+                self.host_watcher.add(host)
                 self.db.set_limit(host.mac, "", direction, 1)
                 self.db.log_activity(
                     "block", "{} {} blocked".format(host.ip, direction), host.mac

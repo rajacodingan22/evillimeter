@@ -17,7 +17,7 @@ class Host(object):
         return self.mac == other.mac and self.ip == other.ip
 
     def __hash__(self):
-        return hash(self.ip)
+        return hash((self.ip, self.mac))
 
     def pretty_status(self):
         if self.limited:

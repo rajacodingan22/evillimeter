@@ -131,6 +131,7 @@ class MainMenu(CommandMenu):
             self.gateway_ip,
             self.gateway_mac,
             self.netmask,
+            db=self.db,
         )
         self.web_server.start(port)
 
