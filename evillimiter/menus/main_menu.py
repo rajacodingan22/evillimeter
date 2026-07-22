@@ -255,6 +255,7 @@ class MainMenu(CommandMenu):
             self.arp_spoofer.add(host)
             self.limiter.limit(host, direction, rate)
             self.bandwidth_monitor.add(host)
+            self.host_watcher.add(host)
 
             IO.ok(
                 "{}{}{r} {} {}limited{r} to {}.".format(
@@ -282,6 +283,7 @@ class MainMenu(CommandMenu):
 
                 self.limiter.block(host, direction)
                 self.bandwidth_monitor.add(host)
+                self.host_watcher.add(host)
                 IO.ok(
                     "{}{}{r} {} {}blocked{r}.".format(
                         IO.Fore.LIGHTYELLOW_EX,
